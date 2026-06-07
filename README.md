@@ -16,9 +16,9 @@
 
 ## 支持的配置文件
 
-- `AGENTS.md` / `agents.md`
-- `CLAUDE.md` / `claude.md`
-- `GEMINI.md` / `gemini.md`
+- `AGENTS.md`
+- `CLAUDE.md`
+- `GEMINI.md`
 - `.cursorrules`
 - `.mcp.json`
 - `.github/copilot-instructions.md`

@@ -2,7 +2,7 @@
   "name": "vscode-ai-config-jumper",
   "displayName": "AI Config Jumper",
   "description": "在 VS Code 侧边栏快速查看并跳转当前工作区里的 AI 配置文件和目录。",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "publisher": "neorrrr",
   "icon": "media/icon.png",
   "license": "MIT",

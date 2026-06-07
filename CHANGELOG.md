@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.0.5
+
+- Match only canonical uppercase project instruction files: `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md`.
+- Stop showing lowercase variants such as `agents.md` as AI config hits.
+
 ## 0.0.4
 
 - Add optional system-level AI config discovery behind the `aiConfigJumper.showSystemConfigs` setting.

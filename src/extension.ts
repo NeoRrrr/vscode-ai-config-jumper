@@ -2,16 +2,13 @@ import * as path from "node:path";
 import * as os from "node:os";
 import * as vscode from "vscode";
 
-const AI_CONFIG_FILE_NAMES = new Set([
-  "AGENTS.md",
-  "agents.md",
-  "CLAUDE.md",
-  "claude.md",
-  "GEMINI.md",
-  "gemini.md",
-  ".cursorrules",
-  ".mcp.json"
-]);
+const AI_CONFIG_FILE_NAME_GROUPS = [
+  ["AGENTS.md"],
+  ["CLAUDE.md"],
+  ["GEMINI.md"],
+  [".cursorrules"],
+  [".mcp.json"]
+];
 
 const AI_CONFIG_FILE_PATHS = new Set([
   path.join(".github", "copilot-instructions.md"),
@@ -147,18 +144,18 @@ class AiConfigTreeDataProvider implements vscode.TreeDataProvider<TreeNode> {
     resources: ConfigResource[]
   ): Promise<void> {
     const seen = new Set<string>();
-    const addCandidate = async (kind: ConfigKind, relativePath: string) => {
+    const addCandidate = async (kind: ConfigKind, relativePath: string): Promise<boolean> => {
       const uri = getWorkspaceCandidateUri(workspaceFolder, relativePath);
 
       if (seen.has(uri.fsPath)) {
-        return;
+        return false;
       }
 
       try {
         const stat = await vscode.workspace.fs.stat(uri);
 
         if (!hasFileType(stat.type, kind)) {
-          return;
+          return false;
         }
 
         resources.push({
@@ -170,13 +167,15 @@ class AiConfigTreeDataProvider implements vscode.TreeDataProvider<TreeNode> {
           workspaceFolder
         });
         seen.add(uri.fsPath);
+        return true;
       } catch {
         // Missing workspace configs are expected. Only existing root-level candidates are shown.
+        return false;
       }
     };
 
-    for (const fileName of AI_CONFIG_FILE_NAMES) {
-      await addCandidate("file", fileName);
+    for (const fileNameGroup of AI_CONFIG_FILE_NAME_GROUPS) {
+      await addFirstExistingCandidate("file", fileNameGroup, addCandidate);
     }
 
     for (const relativePath of AI_CONFIG_FILE_PATHS) {
@@ -344,6 +343,18 @@ async function revealDirectoryInExplorer(uri: vscode.Uri): Promise<void> {
 
 function getWorkspaceCandidateUri(workspaceFolder: vscode.WorkspaceFolder, relativePath: string): vscode.Uri {
   return vscode.Uri.joinPath(workspaceFolder.uri, ...relativePath.split(/[\\/]+/).filter(Boolean));
+}
+
+async function addFirstExistingCandidate(
+  kind: ConfigKind,
+  relativePaths: string[],
+  addCandidate: (kind: ConfigKind, relativePath: string) => Promise<boolean>
+): Promise<void> {
+  for (const relativePath of relativePaths) {
+    if (await addCandidate(kind, relativePath)) {
+      return;
+    }
+  }
 }
 
 function getUriFromCommandTarget(target: unknown): vscode.Uri | undefined {

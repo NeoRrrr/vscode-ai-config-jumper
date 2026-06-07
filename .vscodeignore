@@ -6,3 +6,4 @@ tsconfig.json
 *.map
 social
 *.vsix
+media/activity-icon-option-*.svg
