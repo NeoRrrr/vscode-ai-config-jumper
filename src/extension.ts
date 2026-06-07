@@ -1,4 +1,5 @@
 import * as path from "node:path";
+import * as os from "node:os";
 import * as vscode from "vscode";
 
 const AI_CONFIG_FILE_NAMES = new Set([
@@ -33,12 +34,23 @@ const IGNORED_DIRECTORIES = new Set([
 ]);
 
 type ConfigKind = "file" | "directory";
+type ConfigScope = "workspace" | "system";
+type GroupId = "system";
 type TreeNode = GroupNode | ResourceNode | FileSystemNode | MessageNode;
 
 interface ConfigResource {
   kind: ConfigKind;
+  scope: ConfigScope;
   uri: vscode.Uri;
-  workspaceFolder: vscode.WorkspaceFolder;
+  label: string;
+  description: string;
+  workspaceFolder?: vscode.WorkspaceFolder;
+}
+
+interface SystemConfigCandidate {
+  kind: ConfigKind;
+  uri: vscode.Uri;
+  source: string;
 }
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -51,6 +63,11 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     treeView,
     vscode.commands.registerCommand("aiConfigJumper.refresh", () => provider.refresh()),
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration("aiConfigJumper.showSystemConfigs")) {
+        provider.refresh();
+      }
+    }),
     vscode.commands.registerCommand("aiConfigJumper.revealDirectory", async (target: unknown) => {
       const uri = getUriFromCommandTarget(target);
 
@@ -85,20 +102,12 @@ class AiConfigTreeDataProvider implements vscode.TreeDataProvider<TreeNode> {
   }
 
   async getChildren(element?: TreeNode): Promise<TreeNode[]> {
-    if (!vscode.workspace.workspaceFolders?.length) {
-      return element ? [] : [new MessageNode("Open a workspace to scan AI configs.")];
-    }
-
     if (!element) {
-      return [
-        new GroupNode("Files", "files", this.getResourcesByKind("file").length),
-        new GroupNode("Directories", "directories", this.getResourcesByKind("directory").length)
-      ];
+      return this.getRootNodes();
     }
 
     if (element instanceof GroupNode) {
-      const kind: ConfigKind = element.groupId === "files" ? "file" : "directory";
-      const resources = this.getResourcesByKind(kind);
+      const resources = this.getResourcesByGroup(element.groupId);
 
       if (resources.length === 0) {
         return [new MessageNode(`No ${element.displayName.toLowerCase()} found.`)];
@@ -122,52 +131,115 @@ class AiConfigTreeDataProvider implements vscode.TreeDataProvider<TreeNode> {
     const resources: ConfigResource[] = [];
 
     for (const workspaceFolder of vscode.workspace.workspaceFolders ?? []) {
-      await this.walkWorkspaceFolder(workspaceFolder, workspaceFolder.uri, resources);
+      await this.findWorkspaceConfigs(workspaceFolder, resources);
+    }
+
+    if (shouldShowSystemConfigs()) {
+      await this.findSystemConfigs(resources);
     }
 
     this.resources = resources.sort(compareResources);
     this.changeEmitter.fire(undefined);
   }
 
-  private async walkWorkspaceFolder(
+  private async findWorkspaceConfigs(
     workspaceFolder: vscode.WorkspaceFolder,
-    directoryUri: vscode.Uri,
     resources: ConfigResource[]
   ): Promise<void> {
-    let entries: [string, vscode.FileType][];
+    const seen = new Set<string>();
+    const addCandidate = async (kind: ConfigKind, relativePath: string) => {
+      const uri = getWorkspaceCandidateUri(workspaceFolder, relativePath);
 
-    try {
-      entries = await vscode.workspace.fs.readDirectory(directoryUri);
-    } catch (error) {
-      console.warn(`Failed to scan ${directoryUri.toString()}`, error);
-      return;
+      if (seen.has(uri.fsPath)) {
+        return;
+      }
+
+      try {
+        const stat = await vscode.workspace.fs.stat(uri);
+
+        if (!hasFileType(stat.type, kind)) {
+          return;
+        }
+
+        resources.push({
+          kind,
+          scope: "workspace",
+          uri,
+          label: relativePath,
+          description: workspaceFolder.name,
+          workspaceFolder
+        });
+        seen.add(uri.fsPath);
+      } catch {
+        // Missing workspace configs are expected. Only existing root-level candidates are shown.
+      }
+    };
+
+    for (const fileName of AI_CONFIG_FILE_NAMES) {
+      await addCandidate("file", fileName);
     }
 
-    for (const [name, fileType] of entries) {
-      const entryUri = vscode.Uri.joinPath(directoryUri, name);
-      const relativePath = getWorkspaceRelativePath(workspaceFolder, entryUri);
+    for (const relativePath of AI_CONFIG_FILE_PATHS) {
+      await addCandidate("file", relativePath);
+    }
 
-      if (fileType === vscode.FileType.Directory) {
-        if (IGNORED_DIRECTORIES.has(name)) {
-          continue;
-        }
-
-        if (AI_CONFIG_DIRECTORIES.has(name)) {
-          resources.push({ kind: "directory", uri: entryUri, workspaceFolder });
-        }
-
-        await this.walkWorkspaceFolder(workspaceFolder, entryUri, resources);
-        continue;
-      }
-
-      if (fileType === vscode.FileType.File && isAiConfigFile(name, relativePath)) {
-        resources.push({ kind: "file", uri: entryUri, workspaceFolder });
-      }
+    for (const directoryName of AI_CONFIG_DIRECTORIES) {
+      await addCandidate("directory", directoryName);
     }
   }
 
-  private getResourcesByKind(kind: ConfigKind): ConfigResource[] {
-    return this.resources.filter((resource) => resource.kind === kind);
+  private getRootNodes(): TreeNode[] {
+    const nodes: TreeNode[] = [];
+
+    if (vscode.workspace.workspaceFolders?.length) {
+      const workspaceResources = this.resources.filter((resource) => resource.scope === "workspace");
+      nodes.push(...workspaceResources.map((resource) => new ResourceNode(resource)));
+
+      if (workspaceResources.length === 0) {
+        nodes.push(new MessageNode("No project AI configs found."));
+      }
+    } else {
+      nodes.push(new MessageNode("Open a workspace to scan project AI configs."));
+    }
+
+    if (shouldShowSystemConfigs()) {
+      nodes.push(new GroupNode("System", "system", this.getResourcesByGroup("system").length));
+    }
+
+    return nodes;
+  }
+
+  private getResourcesByGroup(_groupId: GroupId): ConfigResource[] {
+    return this.resources.filter((resource) => resource.scope === "system");
+  }
+
+  private async findSystemConfigs(resources: ConfigResource[]): Promise<void> {
+    const seen = new Set(resources.map((resource) => resource.uri.fsPath));
+
+    for (const candidate of getSystemConfigCandidates()) {
+      if (seen.has(candidate.uri.fsPath)) {
+        continue;
+      }
+
+      try {
+        const stat = await vscode.workspace.fs.stat(candidate.uri);
+
+        if (!hasFileType(stat.type, candidate.kind)) {
+          continue;
+        }
+
+        resources.push({
+          kind: candidate.kind,
+          scope: "system",
+          uri: candidate.uri,
+          label: formatHomePath(candidate.uri.fsPath),
+          description: candidate.source
+        });
+        seen.add(candidate.uri.fsPath);
+      } catch {
+        // Missing system configs are expected. Only existing files and directories are shown.
+      }
+    }
   }
 
   private async getDirectoryChildren(uri: vscode.Uri): Promise<TreeNode[]> {
@@ -195,7 +267,7 @@ class AiConfigTreeDataProvider implements vscode.TreeDataProvider<TreeNode> {
 class GroupNode extends vscode.TreeItem {
   constructor(
     readonly displayName: string,
-    readonly groupId: "files" | "directories",
+    readonly groupId: GroupId,
     count: number
   ) {
     super(`${displayName} (${count})`, vscode.TreeItemCollapsibleState.Expanded);
@@ -205,14 +277,13 @@ class GroupNode extends vscode.TreeItem {
 
 class ResourceNode extends vscode.TreeItem {
   constructor(readonly resource: ConfigResource) {
-    const relativePath = getWorkspaceRelativePath(resource.workspaceFolder, resource.uri);
     const collapsibleState =
       resource.kind === "directory" ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None;
 
-    super(relativePath, collapsibleState);
+    super(resource.label, collapsibleState);
 
     this.resourceUri = resource.uri;
-    this.description = resource.workspaceFolder.name;
+    this.description = resource.description;
     this.tooltip = resource.uri.fsPath;
     this.contextValue = resource.kind;
 
@@ -271,12 +342,8 @@ async function revealDirectoryInExplorer(uri: vscode.Uri): Promise<void> {
   }
 }
 
-function getWorkspaceRelativePath(workspaceFolder: vscode.WorkspaceFolder, uri: vscode.Uri): string {
-  return path.relative(workspaceFolder.uri.fsPath, uri.fsPath);
-}
-
-function isAiConfigFile(fileName: string, relativePath: string): boolean {
-  return AI_CONFIG_FILE_NAMES.has(fileName) || AI_CONFIG_FILE_PATHS.has(relativePath);
+function getWorkspaceCandidateUri(workspaceFolder: vscode.WorkspaceFolder, relativePath: string): vscode.Uri {
+  return vscode.Uri.joinPath(workspaceFolder.uri, ...relativePath.split(/[\\/]+/).filter(Boolean));
 }
 
 function getUriFromCommandTarget(target: unknown): vscode.Uri | undefined {
@@ -300,15 +367,19 @@ function getUriFromCommandTarget(target: unknown): vscode.Uri | undefined {
 }
 
 function compareResources(left: ConfigResource, right: ConfigResource): number {
-  const leftWorkspace = left.workspaceFolder.name.localeCompare(right.workspaceFolder.name);
+  const leftScope = left.scope.localeCompare(right.scope);
+
+  if (leftScope !== 0) {
+    return leftScope;
+  }
+
+  const leftWorkspace = left.description.localeCompare(right.description);
 
   if (leftWorkspace !== 0) {
     return leftWorkspace;
   }
 
-  return getWorkspaceRelativePath(left.workspaceFolder, left.uri).localeCompare(
-    getWorkspaceRelativePath(right.workspaceFolder, right.uri)
-  );
+  return left.label.localeCompare(right.label);
 }
 
 function compareDirectoryEntries(left: [string, vscode.FileType], right: [string, vscode.FileType]): number {
@@ -320,4 +391,81 @@ function compareDirectoryEntries(left: [string, vscode.FileType], right: [string
   }
 
   return left[0].localeCompare(right[0]);
+}
+
+function shouldShowSystemConfigs(): boolean {
+  return vscode.workspace.getConfiguration("aiConfigJumper").get("showSystemConfigs", false);
+}
+
+function getSystemConfigCandidates(): SystemConfigCandidate[] {
+  const home = os.homedir();
+  const appData = process.env.APPDATA;
+  const candidates: SystemConfigCandidate[] = [];
+
+  const addHome = (kind: ConfigKind, source: string, ...segments: string[]) => {
+    candidates.push({ kind, source, uri: vscode.Uri.file(path.join(home, ...segments)) });
+  };
+
+  const addPath = (kind: ConfigKind, source: string, fsPath: string | undefined) => {
+    if (fsPath) {
+      candidates.push({ kind, source, uri: vscode.Uri.file(fsPath) });
+    }
+  };
+
+  addHome("directory", "Codex", ".codex");
+  addHome("file", "Codex", ".codex", "config.toml");
+  addHome("file", "Codex", ".codex", "AGENTS.md");
+
+  addHome("directory", "Claude Code", ".claude");
+  addHome("file", "Claude Code", ".claude.json");
+  addHome("file", "Claude Code", ".claude", "settings.json");
+  addHome("file", "Claude Code", ".claude", "CLAUDE.md");
+
+  addHome("directory", "Gemini CLI", ".gemini");
+  addHome("file", "Gemini CLI", ".gemini", "settings.json");
+  addHome("file", "Gemini CLI", ".gemini", "GEMINI.md");
+
+  addHome("directory", "Cursor", ".cursor");
+  addHome("file", "Cursor", ".cursor", "mcp.json");
+
+  addHome("directory", "Windsurf", ".windsurf");
+  addHome("file", "MCP", ".mcp.json");
+
+  if (process.platform === "darwin") {
+    addPath("file", "Claude Desktop", path.join(home, "Library", "Application Support", "Claude", "claude_desktop_config.json"));
+    addPath("file", "VS Code", path.join(home, "Library", "Application Support", "Code", "User", "mcp.json"));
+    addPath("file", "VS Code Insiders", path.join(home, "Library", "Application Support", "Code - Insiders", "User", "mcp.json"));
+    addPath("file", "VSCodium", path.join(home, "Library", "Application Support", "VSCodium", "User", "mcp.json"));
+  } else if (process.platform === "win32") {
+    addPath("file", "Claude Desktop", appData ? path.join(appData, "Claude", "claude_desktop_config.json") : undefined);
+    addPath("file", "VS Code", appData ? path.join(appData, "Code", "User", "mcp.json") : undefined);
+    addPath("file", "VS Code Insiders", appData ? path.join(appData, "Code - Insiders", "User", "mcp.json") : undefined);
+    addPath("file", "VSCodium", appData ? path.join(appData, "VSCodium", "User", "mcp.json") : undefined);
+  } else {
+    addPath("file", "Claude Desktop", path.join(home, ".config", "Claude", "claude_desktop_config.json"));
+    addPath("file", "VS Code", path.join(home, ".config", "Code", "User", "mcp.json"));
+    addPath("file", "VS Code Insiders", path.join(home, ".config", "Code - Insiders", "User", "mcp.json"));
+    addPath("file", "VSCodium", path.join(home, ".config", "VSCodium", "User", "mcp.json"));
+  }
+
+  return candidates;
+}
+
+function hasFileType(actual: vscode.FileType, expected: ConfigKind): boolean {
+  const expectedType = expected === "file" ? vscode.FileType.File : vscode.FileType.Directory;
+  return (actual & expectedType) === expectedType;
+}
+
+function formatHomePath(fsPath: string): string {
+  const home = os.homedir();
+
+  if (fsPath === home) {
+    return "~";
+  }
+
+  if (fsPath.startsWith(`${home}${path.sep}`)) {
+    return `~${path.sep}${path.relative(home, fsPath)}`;
+  }
+
+  return fsPath;
 }

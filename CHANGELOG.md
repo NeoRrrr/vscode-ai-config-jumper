@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.0.4
+
+- Add optional system-level AI config discovery behind the `aiConfigJumper.showSystemConfigs` setting.
+- Add a `System` Tree View group for user-level Codex, Claude, Gemini, Cursor, Windsurf, VS Code MCP, and Claude Desktop config locations.
+- Replace separate `Files` and `Directories` groups with one workspace-root list.
+- Only show project-level config entries from fixed workspace-root locations.
+
 ## 0.0.3
 
 - Keep directory navigation inside the AI Configs view instead of switching to Explorer on click.

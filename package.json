@@ -2,7 +2,7 @@
   "name": "vscode-ai-config-jumper",
   "displayName": "AI Config Jumper",
   "description": "在 VS Code 侧边栏快速查看并跳转当前工作区里的 AI 配置文件和目录。",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "publisher": "neorrrr",
   "icon": "media/icon.png",
   "license": "MIT",
@@ -25,6 +25,16 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "configuration": {
+      "title": "AI Config Jumper",
+      "properties": {
+        "aiConfigJumper.showSystemConfigs": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show user/system-level AI configuration files and directories, such as ~/.codex, ~/.claude, ~/.gemini, ~/.cursor, and global MCP config files."
+        }
+      }
+    },
     "commands": [
       {
         "command": "aiConfigJumper.refresh",
