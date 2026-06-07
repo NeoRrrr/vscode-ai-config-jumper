@@ -2,7 +2,7 @@
   "name": "vscode-ai-config-jumper",
   "displayName": "AI Config Jumper",
   "description": "在 VS Code 侧边栏快速查看并跳转当前工作区里的 AI 配置文件和目录。",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "publisher": "neorrrr",
   "icon": "media/icon.png",
   "license": "MIT",
@@ -44,6 +44,31 @@
       {
         "command": "aiConfigJumper.revealDirectory",
         "title": "Reveal Directory in Explorer"
+      },
+      {
+        "command": "aiConfigJumper.openFile",
+        "title": "Open File",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "aiConfigJumper.openToSide",
+        "title": "Open to the Side",
+        "icon": "$(split-horizontal)"
+      },
+      {
+        "command": "aiConfigJumper.copyPath",
+        "title": "Copy Path",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "aiConfigJumper.copyRelativePath",
+        "title": "Copy Relative Path",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "aiConfigJumper.revealInExplorer",
+        "title": "Reveal in Explorer",
+        "icon": "$(reveal)"
       }
     ],
     "menus": {
@@ -64,6 +89,31 @@
           "command": "aiConfigJumper.revealDirectory",
           "when": "view == aiConfigJumper.configs && viewItem == fsDirectory",
           "group": "navigation"
+        },
+        {
+          "command": "aiConfigJumper.openFile",
+          "when": "view == aiConfigJumper.configs && viewItem =~ /^(file|fsFile)$/",
+          "group": "navigation@1"
+        },
+        {
+          "command": "aiConfigJumper.openToSide",
+          "when": "view == aiConfigJumper.configs && viewItem =~ /^(file|fsFile)$/",
+          "group": "navigation@2"
+        },
+        {
+          "command": "aiConfigJumper.revealInExplorer",
+          "when": "view == aiConfigJumper.configs && viewItem =~ /^(file|fsFile)$/",
+          "group": "navigation@3"
+        },
+        {
+          "command": "aiConfigJumper.copyPath",
+          "when": "view == aiConfigJumper.configs && viewItem =~ /^(file|directory|fsFile|fsDirectory)$/",
+          "group": "navigation@4"
+        },
+        {
+          "command": "aiConfigJumper.copyRelativePath",
+          "when": "view == aiConfigJumper.configs && viewItem =~ /^(file|directory|fsFile|fsDirectory)$/",
+          "group": "navigation@5"
         }
       ]
     },

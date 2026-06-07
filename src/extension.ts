@@ -65,6 +65,56 @@ export function activate(context: vscode.ExtensionContext): void {
         provider.refresh();
       }
     }),
+    vscode.commands.registerCommand("aiConfigJumper.openFile", async (target: unknown) => {
+      const uri = getUriFromCommandTarget(target);
+
+      if (!uri) {
+        void vscode.window.showWarningMessage("Could not find a file to open.");
+        return;
+      }
+
+      await vscode.commands.executeCommand("vscode.open", uri);
+    }),
+    vscode.commands.registerCommand("aiConfigJumper.openToSide", async (target: unknown) => {
+      const uri = getUriFromCommandTarget(target);
+
+      if (!uri) {
+        void vscode.window.showWarningMessage("Could not find a file to open.");
+        return;
+      }
+
+      await vscode.window.showTextDocument(uri, { preview: false, viewColumn: vscode.ViewColumn.Beside });
+    }),
+    vscode.commands.registerCommand("aiConfigJumper.copyPath", async (target: unknown) => {
+      const uri = getUriFromCommandTarget(target);
+
+      if (!uri) {
+        void vscode.window.showWarningMessage("Could not find a path to copy.");
+        return;
+      }
+
+      await vscode.env.clipboard.writeText(uri.fsPath);
+    }),
+    vscode.commands.registerCommand("aiConfigJumper.copyRelativePath", async (target: unknown) => {
+      const uri = getUriFromCommandTarget(target);
+
+      if (!uri) {
+        void vscode.window.showWarningMessage("Could not find a path to copy.");
+        return;
+      }
+
+      await vscode.env.clipboard.writeText(getDisplayPath(uri));
+    }),
+    vscode.commands.registerCommand("aiConfigJumper.revealInExplorer", async (target: unknown) => {
+      const uri = getUriFromCommandTarget(target);
+
+      if (!uri) {
+        void vscode.window.showWarningMessage("Could not find an item to reveal.");
+        return;
+      }
+
+      await revealInExplorer(uri);
+    }),
     vscode.commands.registerCommand("aiConfigJumper.revealDirectory", async (target: unknown) => {
       const uri = getUriFromCommandTarget(target);
 
@@ -332,12 +382,16 @@ class MessageNode extends vscode.TreeItem {
 }
 
 async function revealDirectoryInExplorer(uri: vscode.Uri): Promise<void> {
+  await revealInExplorer(uri);
+}
+
+async function revealInExplorer(uri: vscode.Uri): Promise<void> {
   try {
     await vscode.commands.executeCommand("workbench.view.explorer");
     await vscode.commands.executeCommand("revealInExplorer", uri);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    void vscode.window.showWarningMessage(`Could not reveal directory in Explorer: ${message}`);
+    void vscode.window.showWarningMessage(`Could not reveal item in Explorer: ${message}`);
   }
 }
 
@@ -375,6 +429,16 @@ function getUriFromCommandTarget(target: unknown): vscode.Uri | undefined {
   }
 
   return undefined;
+}
+
+function getDisplayPath(uri: vscode.Uri): string {
+  const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
+
+  if (workspaceFolder) {
+    return path.relative(workspaceFolder.uri.fsPath, uri.fsPath);
+  }
+
+  return formatHomePath(uri.fsPath);
 }
 
 function compareResources(left: ConfigResource, right: ConfigResource): number {

@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.0.6
+
+- Add context menu actions for files and directories.
+- Support opening files, revealing files in Explorer, and copying item paths from the AI Configs tree.
+- Add Open to the Side and Copy Relative Path actions.
+
 ## 0.0.5
 
 - Match only canonical uppercase project instruction files: `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md`.
