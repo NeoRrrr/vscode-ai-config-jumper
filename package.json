@@ -4,6 +4,7 @@
   "description": "Quickly find and open AI-related config files and directories in the current workspace.",
   "version": "0.0.1",
   "publisher": "neorrrr",
+  "icon": "media/icon.png",
   "license": "MIT",
   "repository": {
     "type": "git",
