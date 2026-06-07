@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.0.3
+
+- Keep directory navigation inside the AI Configs view instead of switching to Explorer on click.
+- Allow AI config directories to expand and show their contents.
+
 ## 0.0.2
 
 - Rewrite Marketplace README as a Chinese user-facing introduction.

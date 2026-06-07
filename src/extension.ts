@@ -33,7 +33,7 @@ const IGNORED_DIRECTORIES = new Set([
 ]);
 
 type ConfigKind = "file" | "directory";
-type TreeNode = GroupNode | ResourceNode | MessageNode;
+type TreeNode = GroupNode | ResourceNode | FileSystemNode | MessageNode;
 
 interface ConfigResource {
   kind: ConfigKind;
@@ -51,7 +51,14 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     treeView,
     vscode.commands.registerCommand("aiConfigJumper.refresh", () => provider.refresh()),
-    vscode.commands.registerCommand("aiConfigJumper.revealDirectory", async (uri: vscode.Uri) => {
+    vscode.commands.registerCommand("aiConfigJumper.revealDirectory", async (target: unknown) => {
+      const uri = getUriFromCommandTarget(target);
+
+      if (!uri) {
+        void vscode.window.showWarningMessage("Could not find a directory to reveal.");
+        return;
+      }
+
       await revealDirectoryInExplorer(uri);
     })
   );
@@ -77,7 +84,7 @@ class AiConfigTreeDataProvider implements vscode.TreeDataProvider<TreeNode> {
     return element;
   }
 
-  getChildren(element?: TreeNode): vscode.ProviderResult<TreeNode[]> {
+  async getChildren(element?: TreeNode): Promise<TreeNode[]> {
     if (!vscode.workspace.workspaceFolders?.length) {
       return element ? [] : [new MessageNode("Open a workspace to scan AI configs.")];
     }
@@ -98,6 +105,14 @@ class AiConfigTreeDataProvider implements vscode.TreeDataProvider<TreeNode> {
       }
 
       return resources.map((resource) => new ResourceNode(resource));
+    }
+
+    if (element instanceof ResourceNode && element.resource.kind === "directory") {
+      return this.getDirectoryChildren(element.resource.uri);
+    }
+
+    if (element instanceof FileSystemNode && element.fileType === vscode.FileType.Directory) {
+      return this.getDirectoryChildren(element.uri);
     }
 
     return [];
@@ -154,6 +169,27 @@ class AiConfigTreeDataProvider implements vscode.TreeDataProvider<TreeNode> {
   private getResourcesByKind(kind: ConfigKind): ConfigResource[] {
     return this.resources.filter((resource) => resource.kind === kind);
   }
+
+  private async getDirectoryChildren(uri: vscode.Uri): Promise<TreeNode[]> {
+    let entries: [string, vscode.FileType][];
+
+    try {
+      entries = await vscode.workspace.fs.readDirectory(uri);
+    } catch (error) {
+      console.warn(`Failed to read ${uri.toString()}`, error);
+      return [new MessageNode("Unable to read this directory.")];
+    }
+
+    const visibleEntries = entries
+      .filter(([name, fileType]) => fileType !== vscode.FileType.Directory || !IGNORED_DIRECTORIES.has(name))
+      .sort(compareDirectoryEntries);
+
+    if (visibleEntries.length === 0) {
+      return [new MessageNode("Empty directory.")];
+    }
+
+    return visibleEntries.map(([name, fileType]) => new FileSystemNode(name, vscode.Uri.joinPath(uri, name), fileType));
+  }
 }
 
 class GroupNode extends vscode.TreeItem {
@@ -168,10 +204,12 @@ class GroupNode extends vscode.TreeItem {
 }
 
 class ResourceNode extends vscode.TreeItem {
-  constructor(resource: ConfigResource) {
+  constructor(readonly resource: ConfigResource) {
     const relativePath = getWorkspaceRelativePath(resource.workspaceFolder, resource.uri);
+    const collapsibleState =
+      resource.kind === "directory" ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None;
 
-    super(relativePath, vscode.TreeItemCollapsibleState.None);
+    super(relativePath, collapsibleState);
 
     this.resourceUri = resource.uri;
     this.description = resource.workspaceFolder.name;
@@ -187,10 +225,30 @@ class ResourceNode extends vscode.TreeItem {
       };
     } else {
       this.iconPath = new vscode.ThemeIcon("folder");
+    }
+  }
+}
+
+class FileSystemNode extends vscode.TreeItem {
+  constructor(
+    label: string,
+    readonly uri: vscode.Uri,
+    readonly fileType: vscode.FileType
+  ) {
+    const isDirectory = fileType === vscode.FileType.Directory;
+
+    super(label, isDirectory ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
+
+    this.resourceUri = uri;
+    this.tooltip = uri.fsPath;
+    this.contextValue = isDirectory ? "fsDirectory" : "fsFile";
+    this.iconPath = new vscode.ThemeIcon(isDirectory ? "folder" : "file");
+
+    if (!isDirectory) {
       this.command = {
-        command: "aiConfigJumper.revealDirectory",
-        title: "Reveal Directory in Explorer",
-        arguments: [resource.uri]
+        command: "vscode.open",
+        title: "Open File",
+        arguments: [uri]
       };
     }
   }
@@ -221,6 +279,26 @@ function isAiConfigFile(fileName: string, relativePath: string): boolean {
   return AI_CONFIG_FILE_NAMES.has(fileName) || AI_CONFIG_FILE_PATHS.has(relativePath);
 }
 
+function getUriFromCommandTarget(target: unknown): vscode.Uri | undefined {
+  if (target instanceof vscode.Uri) {
+    return target;
+  }
+
+  if (target instanceof ResourceNode) {
+    return target.resource.uri;
+  }
+
+  if (target instanceof FileSystemNode) {
+    return target.uri;
+  }
+
+  if (target instanceof vscode.TreeItem && target.resourceUri instanceof vscode.Uri) {
+    return target.resourceUri;
+  }
+
+  return undefined;
+}
+
 function compareResources(left: ConfigResource, right: ConfigResource): number {
   const leftWorkspace = left.workspaceFolder.name.localeCompare(right.workspaceFolder.name);
 
@@ -231,4 +309,15 @@ function compareResources(left: ConfigResource, right: ConfigResource): number {
   return getWorkspaceRelativePath(left.workspaceFolder, left.uri).localeCompare(
     getWorkspaceRelativePath(right.workspaceFolder, right.uri)
   );
+}
+
+function compareDirectoryEntries(left: [string, vscode.FileType], right: [string, vscode.FileType]): number {
+  const leftIsDirectory = left[1] === vscode.FileType.Directory;
+  const rightIsDirectory = right[1] === vscode.FileType.Directory;
+
+  if (leftIsDirectory !== rightIsDirectory) {
+    return leftIsDirectory ? -1 : 1;
+  }
+
+  return left[0].localeCompare(right[0]);
 }
