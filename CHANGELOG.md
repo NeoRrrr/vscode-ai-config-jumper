@@ -1,5 +1,15 @@
 # Change Log
 
+## 0.0.8
+
+- Add examples and JSON snippets for custom workspace path settings.
+
+## 0.0.7
+
+- Add `aiConfigJumper.customWorkspacePaths` for exact workspace-relative files or directories.
+- Add `aiConfigJumper.searchRoots` for opt-in recursive scanning under selected workspace directories.
+- Keep ignored folders skipped during configured recursive scans.
+
 ## 0.0.6
 
 - Add context menu actions for files and directories.

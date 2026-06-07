@@ -8,6 +8,8 @@
 
 - 扫描当前 VS Code workspace。
 - 只在顶层展示当前 workspace 根目录里的常见 AI 配置入口。
+- 支持配置额外的 workspace 相对路径，例如 `tools/ai/claude/skill`。
+- 支持在指定目录下递归搜索常见 AI 配置名。
 - 点击文件直接在编辑器中打开。
 - 目录会保留在 `AI Configs` 侧边栏中展开，方便继续浏览目录内容。
 - 支持右键复制路径、打开文件、在资源管理器中定位。
@@ -40,6 +42,41 @@
 文件项可以直接打开；目录项可以展开查看其中内容，不会把你切走到资源管理器。插件不会把目录内部命中的文件重复平铺到顶层。
 
 如果你新增、删除或移动了配置文件，点击视图右上角的刷新按钮即可重新扫描。
+
+## 自定义工作区路径
+
+默认情况下，插件只扫描当前 workspace 根目录里的固定 AI 配置入口，避免在大型项目里做全量递归扫描。
+
+如果你的 AI 配置目录放在自定义位置，可以在 VS Code Settings 中加入：
+
+```json
+"aiConfigJumper.customWorkspacePaths": [
+  "tools/ai/claude/skill",
+  "docs/ai/AGENTS.md"
+]
+```
+
+这个配置会把存在的文件或目录直接列出来。路径必须是 workspace 相对路径。
+
+常见示例：
+
+- `tools/ai/claude/skill`
+- `docs/ai/AGENTS.md`
+- `.config/ai`
+
+如果你希望在某些目录下继续自动寻找内置支持的配置名，例如 `AGENTS.md`、`CLAUDE.md`、`.claude/`、`.cursor/`，可以配置搜索根目录：
+
+```json
+"aiConfigJumper.searchRoots": [
+  "tools/ai",
+  "docs",
+  ".github"
+]
+```
+
+`searchRoots` 只会在你指定的目录下搜索，并继续忽略 `node_modules`、`.git`、`dist`、`build`。
+
+如果不确定该填哪一个，优先用 `customWorkspacePaths` 添加一个确切文件或目录；只有希望在某个目录下面继续自动寻找 AI 配置时，再使用 `searchRoots`。
 
 ## 系统级配置
 

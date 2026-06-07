@@ -2,7 +2,7 @@
   "name": "vscode-ai-config-jumper",
   "displayName": "AI Config Jumper",
   "description": "在 VS Code 侧边栏快速查看并跳转当前工作区里的 AI 配置文件和目录。",
-  "version": "0.0.6",
+  "version": "0.0.8",
   "publisher": "neorrrr",
   "icon": "media/icon.png",
   "license": "MIT",
@@ -31,7 +31,73 @@
         "aiConfigJumper.showSystemConfigs": {
           "type": "boolean",
           "default": false,
-          "description": "Show user/system-level AI configuration files and directories, such as ~/.codex, ~/.claude, ~/.gemini, ~/.cursor, and global MCP config files."
+          "markdownDescription": "Show user/system-level AI configuration files and directories, such as `~/.codex`, `~/.claude`, `~/.gemini`, `~/.cursor`, and global MCP config files."
+        },
+        "aiConfigJumper.customWorkspacePaths": {
+          "type": "array",
+          "default": [],
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "default": "tools/ai/claude/skill",
+            "examples": [
+              "tools/ai/claude/skill",
+              "docs/ai/AGENTS.md",
+              ".config/ai"
+            ],
+            "markdownDescription": "A workspace-relative file or directory path, for example `tools/ai/claude/skill`."
+          },
+          "examples": [
+            [
+              "tools/ai/claude/skill",
+              "docs/ai/AGENTS.md"
+            ]
+          ],
+          "defaultSnippets": [
+            {
+              "label": "Show custom AI config paths",
+              "description": "Add common custom workspace-relative AI config paths.",
+              "body": [
+                "tools/ai/claude/skill",
+                "docs/ai/AGENTS.md"
+              ]
+            }
+          ],
+          "markdownDescription": "Additional workspace-relative files or directories to show when they exist. Examples: `tools/ai/claude/skill`, `docs/ai/AGENTS.md`, `.config/ai`."
+        },
+        "aiConfigJumper.searchRoots": {
+          "type": "array",
+          "default": [],
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "default": "tools/ai",
+            "examples": [
+              "tools/ai",
+              "docs",
+              ".github"
+            ],
+            "markdownDescription": "A workspace-relative directory to scan recursively, for example `tools/ai`."
+          },
+          "examples": [
+            [
+              "tools/ai",
+              "docs",
+              ".github"
+            ]
+          ],
+          "defaultSnippets": [
+            {
+              "label": "Scan common AI config roots",
+              "description": "Search selected workspace directories for supported AI config names.",
+              "body": [
+                "tools/ai",
+                "docs",
+                ".github"
+              ]
+            }
+          ],
+          "markdownDescription": "Workspace-relative directories to scan recursively for supported AI config file and directory names. Examples: `tools/ai`, `docs`, `.github`. Ignored folders are skipped."
         }
       }
     },

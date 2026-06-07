@@ -11,8 +11,8 @@ const AI_CONFIG_FILE_NAME_GROUPS = [
 ];
 
 const AI_CONFIG_FILE_PATHS = new Set([
-  path.join(".github", "copilot-instructions.md"),
-  path.join(".vscode", "mcp.json")
+  ".github/copilot-instructions.md",
+  ".vscode/mcp.json"
 ]);
 
 const AI_CONFIG_DIRECTORIES = new Set([
@@ -29,6 +29,8 @@ const IGNORED_DIRECTORIES = new Set([
   "dist",
   "build"
 ]);
+
+const MAX_SEARCH_DEPTH = 8;
 
 type ConfigKind = "file" | "directory";
 type ConfigScope = "workspace" | "system";
@@ -61,7 +63,7 @@ export function activate(context: vscode.ExtensionContext): void {
     treeView,
     vscode.commands.registerCommand("aiConfigJumper.refresh", () => provider.refresh()),
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration("aiConfigJumper.showSystemConfigs")) {
+      if (event.affectsConfiguration("aiConfigJumper")) {
         provider.refresh();
       }
     }),
@@ -235,6 +237,111 @@ class AiConfigTreeDataProvider implements vscode.TreeDataProvider<TreeNode> {
     for (const directoryName of AI_CONFIG_DIRECTORIES) {
       await addCandidate("directory", directoryName);
     }
+
+    for (const customPath of getCustomWorkspacePaths()) {
+      await this.findCustomWorkspacePath(workspaceFolder, customPath, addCandidate);
+    }
+
+    for (const searchRoot of getWorkspaceSearchRoots()) {
+      await this.findWorkspaceConfigsInSearchRoot(workspaceFolder, searchRoot, addCandidate);
+    }
+  }
+
+  private async findCustomWorkspacePath(
+    workspaceFolder: vscode.WorkspaceFolder,
+    relativePath: string,
+    addCandidate: (kind: ConfigKind, relativePath: string) => Promise<boolean>
+  ): Promise<void> {
+    const normalizedRelativePath = normalizeConfiguredRelativePath(relativePath);
+
+    if (!normalizedRelativePath) {
+      return;
+    }
+
+    try {
+      const uri = getWorkspaceCandidateUri(workspaceFolder, normalizedRelativePath);
+      const stat = await vscode.workspace.fs.stat(uri);
+
+      if (hasFileType(stat.type, "directory")) {
+        await addCandidate("directory", normalizedRelativePath);
+      } else if (hasFileType(stat.type, "file")) {
+        await addCandidate("file", normalizedRelativePath);
+      }
+    } catch {
+      // Missing custom paths are expected. Only existing configured paths are shown.
+    }
+  }
+
+  private async findWorkspaceConfigsInSearchRoot(
+    workspaceFolder: vscode.WorkspaceFolder,
+    searchRoot: string,
+    addCandidate: (kind: ConfigKind, relativePath: string) => Promise<boolean>
+  ): Promise<void> {
+    const normalizedSearchRoot = normalizeConfiguredRelativePath(searchRoot, true);
+
+    if (normalizedSearchRoot === undefined || hasIgnoredPathSegment(normalizedSearchRoot)) {
+      return;
+    }
+
+    const searchRootUri = getWorkspaceCandidateUri(workspaceFolder, normalizedSearchRoot);
+
+    try {
+      const stat = await vscode.workspace.fs.stat(searchRootUri);
+
+      if (!hasFileType(stat.type, "directory")) {
+        return;
+      }
+    } catch {
+      // Missing search roots are expected. Only existing configured roots are scanned.
+      return;
+    }
+
+    await this.walkWorkspaceSearchRoot(searchRootUri, normalizedSearchRoot, 0, addCandidate);
+  }
+
+  private async walkWorkspaceSearchRoot(
+    directoryUri: vscode.Uri,
+    directoryRelativePath: string,
+    depth: number,
+    addCandidate: (kind: ConfigKind, relativePath: string) => Promise<boolean>
+  ): Promise<void> {
+    let entries: [string, vscode.FileType][];
+
+    try {
+      entries = await vscode.workspace.fs.readDirectory(directoryUri);
+    } catch {
+      return;
+    }
+
+    for (const [name, fileType] of entries) {
+      const isDirectory = hasFileType(fileType, "directory");
+      const isFile = hasFileType(fileType, "file");
+      const isSymbolicLink = (fileType & vscode.FileType.SymbolicLink) === vscode.FileType.SymbolicLink;
+
+      if (isSymbolicLink || (isDirectory && IGNORED_DIRECTORIES.has(name))) {
+        continue;
+      }
+
+      const relativePath = normalizePathSeparators(path.join(directoryRelativePath, name));
+
+      if (isFile && isKnownAiConfigFilePath(relativePath)) {
+        await addCandidate("file", relativePath);
+        continue;
+      }
+
+      if (!isDirectory) {
+        continue;
+      }
+
+      if (AI_CONFIG_DIRECTORIES.has(name)) {
+        await addCandidate("directory", relativePath);
+        continue;
+      }
+
+      if (depth < MAX_SEARCH_DEPTH) {
+        await this.walkWorkspaceSearchRoot(vscode.Uri.joinPath(directoryUri, name), relativePath, depth + 1, addCandidate);
+      }
+    }
   }
 
   private getRootNodes(): TreeNode[] {
@@ -396,7 +503,13 @@ async function revealInExplorer(uri: vscode.Uri): Promise<void> {
 }
 
 function getWorkspaceCandidateUri(workspaceFolder: vscode.WorkspaceFolder, relativePath: string): vscode.Uri {
-  return vscode.Uri.joinPath(workspaceFolder.uri, ...relativePath.split(/[\\/]+/).filter(Boolean));
+  const segments = relativePath.split(/[\\/]+/).filter(Boolean);
+
+  if (segments.length === 0) {
+    return workspaceFolder.uri;
+  }
+
+  return vscode.Uri.joinPath(workspaceFolder.uri, ...segments);
 }
 
 async function addFirstExistingCandidate(
@@ -470,6 +583,67 @@ function compareDirectoryEntries(left: [string, vscode.FileType], right: [string
 
 function shouldShowSystemConfigs(): boolean {
   return vscode.workspace.getConfiguration("aiConfigJumper").get("showSystemConfigs", false);
+}
+
+function getCustomWorkspacePaths(): string[] {
+  return getStringArrayConfiguration("customWorkspacePaths");
+}
+
+function getWorkspaceSearchRoots(): string[] {
+  return getStringArrayConfiguration("searchRoots");
+}
+
+function getStringArrayConfiguration(key: string): string[] {
+  const values = vscode.workspace.getConfiguration("aiConfigJumper").get<unknown[]>(key, []);
+
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  return values.filter((value): value is string => typeof value === "string");
+}
+
+function normalizeConfiguredRelativePath(relativePath: string, allowWorkspaceRoot = false): string | undefined {
+  let normalized = normalizePathSeparators(relativePath.trim());
+
+  while (normalized.startsWith("./")) {
+    normalized = normalized.slice(2);
+  }
+
+  normalized = normalized.replace(/\/+$/u, "");
+
+  if (normalized === ".") {
+    normalized = "";
+  }
+
+  if (normalized.length === 0) {
+    return allowWorkspaceRoot ? "" : undefined;
+  }
+
+  if (path.isAbsolute(normalized) || normalized.split("/").includes("..")) {
+    return undefined;
+  }
+
+  return normalized;
+}
+
+function normalizePathSeparators(value: string): string {
+  return value.replace(/\\/gu, "/");
+}
+
+function hasIgnoredPathSegment(relativePath: string): boolean {
+  return relativePath.split("/").some((segment) => IGNORED_DIRECTORIES.has(segment));
+}
+
+function isKnownAiConfigFilePath(relativePath: string): boolean {
+  const normalizedRelativePath = normalizePathSeparators(relativePath);
+  const fileName = path.basename(normalizedRelativePath);
+
+  if (AI_CONFIG_FILE_NAME_GROUPS.some((fileNameGroup) => fileNameGroup.includes(fileName))) {
+    return true;
+  }
+
+  return Array.from(AI_CONFIG_FILE_PATHS).some((knownPath) => normalizedRelativePath === knownPath || normalizedRelativePath.endsWith(`/${knownPath}`));
 }
 
 function getSystemConfigCandidates(): SystemConfigCandidate[] {
