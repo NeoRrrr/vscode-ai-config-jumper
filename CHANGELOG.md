@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.0.2
+
+- Rewrite Marketplace README as a Chinese user-facing introduction.
+- Update extension description for published Marketplace usage.
+
 ## 0.0.1
 
 - Add Activity Bar entry for AI config discovery.
