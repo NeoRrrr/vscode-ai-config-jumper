@@ -1,70 +1,101 @@
 # AI Config Jumper
 
-快速跳转当前工作区里的 AI 配置文件和配置目录。
+<p align="center">
+  <img src="media/icon.png" width="96" alt="AI Config Jumper logo" />
+</p>
 
-如果你经常在项目里切换 Codex、Claude、Gemini、Cursor、Copilot、MCP 等配置，AI Config Jumper 会在 VS Code 左侧活动栏提供一个独立入口，把常见 AI 配置集中列出来，点击即可打开或定位。
+<h3 align="center">One sidebar for all your AI coding configs.</h3>
 
-## 功能
+<p align="center">
+  在 VS Code 侧边栏快速发现、打开、复制和定位 Codex、Claude、Gemini、Cursor、Copilot、MCP 等 AI 配置。
+</p>
 
-- 扫描当前 VS Code workspace。
-- 只在顶层展示当前 workspace 根目录里的常见 AI 配置入口。
-- 支持配置额外的 workspace 相对路径，例如 `tools/ai/claude/skill`。
-- 支持在指定目录下递归搜索常见 AI 配置名。
-- 点击文件直接在编辑器中打开。
-- 目录会保留在 `AI Configs` 侧边栏中展开，方便继续浏览目录内容。
-- 支持右键复制路径、打开文件、在资源管理器中定位。
-- 支持手动刷新。
-- 自动忽略 `node_modules`、`.git`、`dist`、`build`。
-- 可选显示用户级 / 系统级 AI 配置，默认关闭。
+<p align="center">
+  <a href="https://marketplace.visualstudio.com/items?itemName=neorrrr.vscode-ai-config-jumper"><img src="https://img.shields.io/visual-studio-marketplace/v/neorrrr.vscode-ai-config-jumper?label=version&color=2563eb" alt="Marketplace version" /></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=neorrrr.vscode-ai-config-jumper"><img src="https://img.shields.io/visual-studio-marketplace/i/neorrrr.vscode-ai-config-jumper?label=installs&color=16a34a" alt="Marketplace installs" /></a>
+  <img src="https://img.shields.io/badge/VS%20Code-%5E1.90.0-007acc" alt="VS Code 1.90+" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-64748b" alt="MIT License" /></a>
+</p>
 
-## 支持的配置文件
+---
 
-- `AGENTS.md`
-- `CLAUDE.md`
-- `GEMINI.md`
-- `.cursorrules`
-- `.mcp.json`
-- `.github/copilot-instructions.md`
-- `.vscode/mcp.json`
+## 为什么需要它？
 
-## 支持的配置目录
+AI 编程工具越来越多，但它们的项目说明、规则和 MCP 配置经常散落在不同位置：
 
-- `.codex/`
-- `.claude/`
-- `.gemini/`
-- `.cursor/`
-- `.windsurf/`
+| 工具 | 常见配置路径 |
+| --- | --- |
+| Codex | `AGENTS.md`、`.codex/` |
+| Claude | `CLAUDE.md`、`.claude/` |
+| Gemini | `GEMINI.md`、`.gemini/` |
+| Cursor | `.cursorrules`、`.cursor/` |
+| Copilot | `.github/copilot-instructions.md` |
+| MCP | `.mcp.json`, `.vscode/mcp.json` |
 
-## 使用方式
+AI Config Jumper 会把这些入口集中到独立的 `AI Configs` 侧边栏里，减少在资源管理器里反复搜索文件的时间。
 
-安装后，在 VS Code 左侧活动栏点击 `AI Configs` 图标即可查看当前工作区中的 AI 配置。
+## 亮点
 
-文件项可以直接打开；目录项可以展开查看其中内容，不会把你切走到资源管理器。插件不会把目录内部命中的文件重复平铺到顶层。
+- **独立 Activity Bar 入口**：不混在资源管理器里，AI 配置单独看。
+- **工作区优先发现**：默认扫描 workspace 根目录里的常见 AI 配置文件和目录。
+- **目录内联展开**：`.codex/`、`.claude/`、`.gemini/`、`.cursor/`、`.windsurf/` 可以直接在侧边栏展开。
+- **自定义路径**：支持添加准确的 workspace 相对路径，例如 `tools/ai/claude/skill`。
+- **定向递归搜索**：只在你指定的目录里继续找配置，避免大型项目里全盘递归。
+- **系统级配置**：可选显示 `~/.codex`、`~/.claude`、`~/.cursor`、全局 MCP 等用户级配置。
+- **右键快捷操作**：打开、侧边打开、资源管理器定位、复制绝对路径、复制相对路径。
+- **本地优先**：只检查本地文件路径，不上传文件内容。
 
-如果你新增、删除或移动了配置文件，点击视图右上角的刷新按钮即可重新扫描。
+## 快速开始
 
-## 自定义工作区路径
+1. 从 VS Code Marketplace 安装扩展。
+2. 打开包含 AI 配置的项目。
+3. 点击 VS Code Activity Bar 里的 `AI Configs` 图标。
+4. 点击文件即可打开，点击目录即可展开浏览。
+5. 新增、删除或移动配置后，点击刷新按钮重新扫描。
 
-默认情况下，插件只扫描当前 workspace 根目录里的固定 AI 配置入口，避免在大型项目里做全量递归扫描。
+## 支持的文件
 
-如果你的 AI 配置目录放在自定义位置，可以在 VS Code Settings 中加入：
+| 文件 | 用途 |
+| --- | --- |
+| `AGENTS.md` | Codex / Agent 项目说明 |
+| `CLAUDE.md` | Claude 项目说明 |
+| `GEMINI.md` | Gemini 项目说明 |
+| `.cursorrules` | Cursor 规则 |
+| `.mcp.json` | 项目 MCP 配置 |
+| `.github/copilot-instructions.md` | GitHub Copilot 项目说明 |
+| `.vscode/mcp.json` | VS Code MCP 配置 |
+
+## 支持的目录
+
+| 目录 | 工具 |
+| --- | --- |
+| `.codex/` | Codex |
+| `.claude/` | Claude |
+| `.gemini/` | Gemini CLI |
+| `.cursor/` | Cursor |
+| `.windsurf/` | Windsurf |
+
+## 配置
+
+AI Config Jumper 开箱即用。只有当你的项目把 AI 配置放在自定义位置时，才需要在 VS Code Settings 里添加 workspace 相对路径。
+
+### 精确自定义路径
+
+如果你已经知道要显示哪个文件或目录，用 `aiConfigJumper.customWorkspacePaths`。
 
 ```json
 "aiConfigJumper.customWorkspacePaths": [
   "tools/ai/claude/skill",
-  "docs/ai/AGENTS.md"
+  "docs/ai/AGENTS.md",
+  ".config/ai"
 ]
 ```
 
-这个配置会把存在的文件或目录直接列出来。路径必须是 workspace 相对路径。
+这个配置适合确定位置的文件或目录。不存在的路径会被自动忽略。
 
-常见示例：
+### 搜索根目录
 
-- `tools/ai/claude/skill`
-- `docs/ai/AGENTS.md`
-- `.config/ai`
-
-如果你希望在某些目录下继续自动寻找内置支持的配置名，例如 `AGENTS.md`、`CLAUDE.md`、`.claude/`、`.cursor/`，可以配置搜索根目录：
+如果你希望插件在某些目录下继续自动寻找内置支持的配置名，用 `aiConfigJumper.searchRoots`。
 
 ```json
 "aiConfigJumper.searchRoots": [
@@ -74,19 +105,17 @@
 ]
 ```
 
-`searchRoots` 只会在你指定的目录下搜索，并继续忽略 `node_modules`、`.git`、`dist`、`build`。
+搜索范围会被限制在你指定的目录下，并继续跳过 `node_modules`、`.git`、`dist`、`build`。
 
-如果不确定该填哪一个，优先用 `customWorkspacePaths` 添加一个确切文件或目录；只有希望在某个目录下面继续自动寻找 AI 配置时，再使用 `searchRoots`。
+### 系统级配置
 
-## 系统级配置
-
-如果你想同时查看当前用户目录下的全局 AI 配置，可以在 VS Code Settings 中打开：
+系统级配置默认隐藏。如果你想同时查看用户目录下的全局 AI 配置，可以打开：
 
 ```json
 "aiConfigJumper.showSystemConfigs": true
 ```
 
-打开后会额外显示 `System` 分组，常见路径包括：
+打开后，侧边栏会新增 `System` 分组，常见路径包括：
 
 - `~/.codex/`
 - `~/.claude/`
@@ -97,6 +126,32 @@
 - VS Code 用户级 `mcp.json`
 - Claude Desktop MCP 配置
 
-## 隐私
+## FAQ
 
-AI Config Jumper 只扫描本地文件路径，不会上传你的文件内容，也不会连接任何远程 AI 服务。系统级配置默认不显示，需要你手动打开。
+### 会扫描整个仓库吗？
+
+不会。默认只检查 workspace 根目录里的固定入口。只有你显式配置 `aiConfigJumper.searchRoots` 后，才会在指定目录下递归搜索。
+
+### 会上传或读取配置内容吗？
+
+不会。AI Config Jumper 只检查本地文件路径；只有你点击文件时，才会通过 VS Code 打开文件。扩展本身不连接任何远程 AI 服务。
+
+### 应该用 `customWorkspacePaths` 还是 `searchRoots`？
+
+知道准确路径时，用 `customWorkspacePaths`。希望在某个目录下面继续自动发现配置时，才用 `searchRoots`。
+
+### 为什么路径没有显示？
+
+路径必须是 workspace 相对路径，并且必须真实存在。绝对路径和包含 `..` 的路径会被忽略。
+
+## 开发
+
+```bash
+npm install
+npm run compile
+npm run package
+```
+
+## License
+
+MIT
