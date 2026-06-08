@@ -107,8 +107,8 @@
         },
         "aiConfigJumper.flattenSystemConfigs": {
           "type": "boolean",
-          "default": false,
-          "markdownDescription": "打开后，系统级配置会直接平铺显示在 `AI Configs` 根列表中；关闭时保持 `System` 分组。"
+          "default": true,
+          "markdownDescription": "打开后，`System` 分组内部会平铺显示所有系统级配置；关闭时，`~/.claude/settings.json`、`~/.gemini/GEMINI.md` 这类文件会收纳到对应目录下。"
         }
       }
     },

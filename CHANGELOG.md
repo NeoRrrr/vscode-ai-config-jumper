@@ -3,9 +3,11 @@
 ## 0.0.9
 
 - Merge user, workspace, and workspace-folder path settings for custom paths and search roots.
-- Add `aiConfigJumper.flattenSystemConfigs` to optionally show system configs inline.
+- Add `aiConfigJumper.flattenSystemConfigs` to optionally show system configs inline inside the `System` group.
+- Compact system files under their parent system directories by default.
 - Add a directory context menu action for creating files.
 - Group path settings together and system display settings together in the Settings UI.
+- Automatically refresh the tree when relevant config files or directories are created or deleted.
 
 ## 0.0.8
 

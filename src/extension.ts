@@ -62,6 +62,8 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     treeView,
     vscode.commands.registerCommand("aiConfigJumper.refresh", () => provider.refresh()),
+    ...createConfigFileSystemWatchers(provider),
+    vscode.workspace.onDidChangeWorkspaceFolders(() => provider.refresh()),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("aiConfigJumper")) {
         provider.refresh();
@@ -152,6 +154,56 @@ export function deactivate(): void {
   // No cleanup required.
 }
 
+function createConfigFileSystemWatchers(provider: AiConfigTreeDataProvider): vscode.Disposable[] {
+  const disposables: vscode.Disposable[] = [];
+  let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+  const scheduleRefresh = () => {
+    if (refreshTimer !== undefined) {
+      clearTimeout(refreshTimer);
+    }
+
+    refreshTimer = setTimeout(() => {
+      refreshTimer = undefined;
+      provider.refresh();
+    }, 100);
+  };
+
+  const workspaceWatcher = vscode.workspace.createFileSystemWatcher("**", false, true, false);
+  const handleWorkspaceFileSystemEvent = (uri: vscode.Uri) => {
+    if (shouldRefreshForWorkspacePath(uri)) {
+      scheduleRefresh();
+    }
+  };
+
+  disposables.push(
+    workspaceWatcher,
+    workspaceWatcher.onDidCreate(handleWorkspaceFileSystemEvent),
+    workspaceWatcher.onDidDelete(handleWorkspaceFileSystemEvent),
+    new vscode.Disposable(() => {
+      if (refreshTimer !== undefined) {
+        clearTimeout(refreshTimer);
+      }
+    })
+  );
+
+  for (const candidate of getSystemConfigCandidates()) {
+    const watcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(vscode.Uri.file(path.dirname(candidate.uri.fsPath)), path.basename(candidate.uri.fsPath)),
+      false,
+      true,
+      false
+    );
+
+    disposables.push(
+      watcher,
+      watcher.onDidCreate(scheduleRefresh),
+      watcher.onDidDelete(scheduleRefresh)
+    );
+  }
+
+  return disposables;
+}
+
 class AiConfigTreeDataProvider implements vscode.TreeDataProvider<TreeNode> {
   private readonly changeEmitter = new vscode.EventEmitter<TreeNode | undefined>();
   private resources: ConfigResource[] = [];
@@ -172,7 +224,7 @@ class AiConfigTreeDataProvider implements vscode.TreeDataProvider<TreeNode> {
     }
 
     if (element instanceof GroupNode) {
-      const resources = this.getResourcesByGroup(element.groupId);
+      const resources = this.getResourcesByGroup(element.groupId, true);
 
       if (resources.length === 0) {
         return [new MessageNode(`No ${element.displayName.toLowerCase()} found.`)];
@@ -375,20 +427,20 @@ class AiConfigTreeDataProvider implements vscode.TreeDataProvider<TreeNode> {
     }
 
     if (shouldShowSystemConfigs()) {
-      const systemResources = this.getResourcesByGroup("system");
-
-      if (shouldFlattenSystemConfigs()) {
-        nodes.push(...systemResources.map((resource) => new ResourceNode(resource)));
-      } else {
-        nodes.push(new GroupNode("System", "system", systemResources.length));
-      }
+      nodes.push(new GroupNode("System", "system", this.getResourcesByGroup("system", true).length));
     }
 
     return nodes;
   }
 
-  private getResourcesByGroup(_groupId: GroupId): ConfigResource[] {
-    return this.resources.filter((resource) => resource.scope === "system");
+  private getResourcesByGroup(_groupId: GroupId, compactDirectories: boolean): ConfigResource[] {
+    const resources = this.resources.filter((resource) => resource.scope === "system");
+
+    if (!compactDirectories || shouldFlattenSystemConfigs()) {
+      return resources;
+    }
+
+    return compactSystemDirectoryEntries(resources);
   }
 
   private async findSystemConfigs(resources: ConfigResource[]): Promise<void> {
@@ -664,6 +716,64 @@ function compareDirectoryEntries(left: [string, vscode.FileType], right: [string
   }
 
   return left[0].localeCompare(right[0]);
+}
+
+function compactSystemDirectoryEntries(resources: ConfigResource[]): ConfigResource[] {
+  const directoryPaths = resources
+    .filter((resource) => resource.kind === "directory")
+    .map((resource) => resource.uri.fsPath);
+
+  return resources.filter((resource) => {
+    if (resource.kind === "directory") {
+      return true;
+    }
+
+    return !directoryPaths.some((directoryPath) => isPathInsideDirectory(resource.uri.fsPath, directoryPath));
+  });
+}
+
+function isPathInsideDirectory(filePath: string, directoryPath: string): boolean {
+  const relativePath = path.relative(directoryPath, filePath);
+  return relativePath.length > 0 && !relativePath.startsWith("..") && !path.isAbsolute(relativePath);
+}
+
+function shouldRefreshForWorkspacePath(uri: vscode.Uri): boolean {
+  const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
+
+  if (!workspaceFolder) {
+    return false;
+  }
+
+  const relativePath = normalizePathSeparators(path.relative(workspaceFolder.uri.fsPath, uri.fsPath));
+
+  if (!relativePath || path.isAbsolute(relativePath) || relativePath.split("/").includes("..") || hasIgnoredPathSegment(relativePath)) {
+    return false;
+  }
+
+  if (isKnownAiConfigFilePath(relativePath) || AI_CONFIG_DIRECTORIES.has(path.basename(relativePath))) {
+    return true;
+  }
+
+  return matchesConfiguredPath(relativePath, getCustomWorkspacePaths(workspaceFolder), false)
+    || matchesConfiguredPath(relativePath, getWorkspaceSearchRoots(workspaceFolder), true);
+}
+
+function matchesConfiguredPath(relativePath: string, configuredPaths: string[], allowWorkspaceRoot: boolean): boolean {
+  return configuredPaths.some((configuredPath) => {
+    const normalizedConfiguredPath = normalizeConfiguredRelativePath(configuredPath, allowWorkspaceRoot);
+
+    if (normalizedConfiguredPath === undefined) {
+      return false;
+    }
+
+    if (normalizedConfiguredPath === "") {
+      return true;
+    }
+
+    return relativePath === normalizedConfiguredPath
+      || relativePath.startsWith(`${normalizedConfiguredPath}/`)
+      || normalizedConfiguredPath.startsWith(`${relativePath}/`);
+  });
 }
 
 function shouldShowSystemConfigs(): boolean {
