@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.0.9
+
+- Merge user, workspace, and workspace-folder path settings for custom paths and search roots.
+- Add `aiConfigJumper.flattenSystemConfigs` to optionally show system configs inline.
+- Add a directory context menu action for creating files.
+- Group path settings together and system display settings together in the Settings UI.
+
 ## 0.0.8
 
 - Add examples and JSON snippets for custom workspace path settings.

@@ -2,7 +2,7 @@
   "name": "vscode-ai-config-jumper",
   "displayName": "AI Config Jumper",
   "description": "在 VS Code 侧边栏快速查看并跳转当前工作区里的 AI 配置文件和目录。",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "publisher": "neorrrr",
   "icon": "media/icon.png",
   "license": "MIT",
@@ -28,28 +28,26 @@
     "configuration": {
       "title": "AI Config Jumper",
       "properties": {
-        "aiConfigJumper.showSystemConfigs": {
-          "type": "boolean",
-          "default": false,
-          "markdownDescription": "Show user/system-level AI configuration files and directories, such as `~/.codex`, `~/.claude`, `~/.gemini`, `~/.cursor`, and global MCP config files."
-        },
         "aiConfigJumper.customWorkspacePaths": {
           "type": "array",
+          "scope": "resource",
           "default": [],
           "uniqueItems": true,
           "items": {
             "type": "string",
-            "default": "skills",
+            "default": "tools/ai/claude/skill",
             "examples": [
+              "tools/ai/claude/skill",
               "skills",
               "skills/claude",
               "docs/ai/AGENTS.md",
               ".config/ai"
             ],
-            "markdownDescription": "A workspace-relative file or directory path, for example `skills` or `docs/ai/AGENTS.md`."
+            "markdownDescription": "一个 workspace 相对文件或目录路径，例如 `tools/ai/claude/skill`、`skills` 或 `docs/ai/AGENTS.md`。"
           },
           "examples": [
             [
+              "tools/ai/claude/skill",
               "skills",
               "docs/ai/AGENTS.md"
             ]
@@ -59,15 +57,17 @@
               "label": "Show custom AI config paths",
               "description": "Add common custom workspace-relative AI config paths.",
               "body": [
+                "tools/ai/claude/skill",
                 "skills",
                 "docs/ai/AGENTS.md"
               ]
             }
           ],
-          "markdownDescription": "Additional workspace-relative files or directories to show when they exist. Examples: `skills`, `skills/claude`, `docs/ai/AGENTS.md`, `.config/ai`."
+          "markdownDescription": "额外显示的 workspace 相对文件或目录。设置页顶部的 **用户** 是全局默认，**工作区** 是当前项目；User、Workspace、Workspace Folder 数组会合并。示例：`tools/ai/claude/skill`、`skills`、`skills/claude`、`docs/ai/AGENTS.md`、`.config/ai`。"
         },
         "aiConfigJumper.searchRoots": {
           "type": "array",
+          "scope": "resource",
           "default": [],
           "uniqueItems": true,
           "items": {
@@ -78,7 +78,7 @@
               "docs",
               ".github"
             ],
-            "markdownDescription": "A workspace-relative directory to scan recursively, for example `tools/ai`."
+            "markdownDescription": "一个 workspace 相对目录，用于递归搜索，例如 `tools/ai`。"
           },
           "examples": [
             [
@@ -98,7 +98,17 @@
               ]
             }
           ],
-          "markdownDescription": "Workspace-relative directories to scan recursively for supported AI config file and directory names. Examples: `tools/ai`, `docs`, `.github`. Ignored folders are skipped."
+          "markdownDescription": "递归搜索内置 AI 配置名的 workspace 相对目录。设置页顶部的 **用户** 是全局默认，**工作区** 是当前项目；User、Workspace、Workspace Folder 数组会合并。示例：`tools/ai`、`docs`、`.github`。会跳过忽略目录。"
+        },
+        "aiConfigJumper.showSystemConfigs": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "显示用户级 / 系统级 AI 配置文件和目录，例如 `~/.codex`、`~/.claude`、`~/.gemini`、`~/.cursor` 和全局 MCP 配置文件。"
+        },
+        "aiConfigJumper.flattenSystemConfigs": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "打开后，系统级配置会直接平铺显示在 `AI Configs` 根列表中；关闭时保持 `System` 分组。"
         }
       }
     },
@@ -133,6 +143,11 @@
         "icon": "$(copy)"
       },
       {
+        "command": "aiConfigJumper.createFile",
+        "title": "New File",
+        "icon": "$(new-file)"
+      },
+      {
         "command": "aiConfigJumper.revealInExplorer",
         "title": "Reveal in Explorer",
         "icon": "$(reveal)"
@@ -148,14 +163,19 @@
       ],
       "view/item/context": [
         {
+          "command": "aiConfigJumper.createFile",
+          "when": "view == aiConfigJumper.configs && viewItem =~ /^(directory|fsDirectory)$/",
+          "group": "navigation@1"
+        },
+        {
           "command": "aiConfigJumper.revealDirectory",
           "when": "view == aiConfigJumper.configs && viewItem == directory",
-          "group": "navigation"
+          "group": "navigation@2"
         },
         {
           "command": "aiConfigJumper.revealDirectory",
           "when": "view == aiConfigJumper.configs && viewItem == fsDirectory",
-          "group": "navigation"
+          "group": "navigation@2"
         },
         {
           "command": "aiConfigJumper.openFile",

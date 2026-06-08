@@ -2,6 +2,7 @@ node_modules
 src
 .vscode
 .gitignore
+AGENTS.md
 tsconfig.json
 *.map
 social

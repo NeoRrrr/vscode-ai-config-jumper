@@ -126,6 +126,22 @@ export function activate(context: vscode.ExtensionContext): void {
       }
 
       await revealDirectoryInExplorer(uri);
+    }),
+    vscode.commands.registerCommand("aiConfigJumper.createFile", async (target: unknown) => {
+      const uri = getDirectoryUriFromCommandTarget(target);
+
+      if (!uri) {
+        void vscode.window.showWarningMessage("Could not find a directory to create the file in.");
+        return;
+      }
+
+      try {
+        await createFileInDirectory(uri);
+        provider.refresh();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        void vscode.window.showWarningMessage(`Could not create file: ${message}`);
+      }
     })
   );
 
@@ -238,11 +254,11 @@ class AiConfigTreeDataProvider implements vscode.TreeDataProvider<TreeNode> {
       await addCandidate("directory", directoryName);
     }
 
-    for (const customPath of getCustomWorkspacePaths()) {
+    for (const customPath of getCustomWorkspacePaths(workspaceFolder)) {
       await this.findCustomWorkspacePath(workspaceFolder, customPath, addCandidate);
     }
 
-    for (const searchRoot of getWorkspaceSearchRoots()) {
+    for (const searchRoot of getWorkspaceSearchRoots(workspaceFolder)) {
       await this.findWorkspaceConfigsInSearchRoot(workspaceFolder, searchRoot, addCandidate);
     }
   }
@@ -359,7 +375,13 @@ class AiConfigTreeDataProvider implements vscode.TreeDataProvider<TreeNode> {
     }
 
     if (shouldShowSystemConfigs()) {
-      nodes.push(new GroupNode("System", "system", this.getResourcesByGroup("system").length));
+      const systemResources = this.getResourcesByGroup("system");
+
+      if (shouldFlattenSystemConfigs()) {
+        nodes.push(...systemResources.map((resource) => new ResourceNode(resource)));
+      } else {
+        nodes.push(new GroupNode("System", "system", systemResources.length));
+      }
     }
 
     return nodes;
@@ -544,6 +566,69 @@ function getUriFromCommandTarget(target: unknown): vscode.Uri | undefined {
   return undefined;
 }
 
+function getDirectoryUriFromCommandTarget(target: unknown): vscode.Uri | undefined {
+  if (target instanceof ResourceNode && target.resource.kind === "directory") {
+    return target.resource.uri;
+  }
+
+  if (target instanceof FileSystemNode && target.fileType === vscode.FileType.Directory) {
+    return target.uri;
+  }
+
+  return undefined;
+}
+
+async function createFileInDirectory(directoryUri: vscode.Uri): Promise<void> {
+  const input = await vscode.window.showInputBox({
+    prompt: "Enter a file name or relative path",
+    placeHolder: "notes.md or nested/notes.md",
+    validateInput: (value) => validateNewFilePath(value)
+  });
+
+  if (input === undefined) {
+    return;
+  }
+
+  const relativePath = normalizeConfiguredRelativePath(input);
+
+  if (!relativePath) {
+    return;
+  }
+
+  const targetUri = vscode.Uri.joinPath(directoryUri, ...relativePath.split("/").filter(Boolean));
+
+  try {
+    await vscode.workspace.fs.stat(targetUri);
+    void vscode.window.showWarningMessage(`File already exists: ${relativePath}`);
+    return;
+  } catch {
+    // Missing target is expected when creating a new file.
+  }
+
+  const parentSegments = relativePath.split("/").slice(0, -1);
+
+  if (parentSegments.length > 0) {
+    await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(directoryUri, ...parentSegments));
+  }
+
+  await vscode.workspace.fs.writeFile(targetUri, new Uint8Array());
+  await vscode.commands.executeCommand("vscode.open", targetUri);
+}
+
+function validateNewFilePath(value: string): string | undefined {
+  if (normalizePathSeparators(value.trim()).endsWith("/")) {
+    return "Enter a file path, not a directory.";
+  }
+
+  const normalized = normalizeConfiguredRelativePath(value);
+
+  if (!normalized) {
+    return "Enter a workspace-relative file path.";
+  }
+
+  return undefined;
+}
+
 function getDisplayPath(uri: vscode.Uri): string {
   const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
 
@@ -585,22 +670,40 @@ function shouldShowSystemConfigs(): boolean {
   return vscode.workspace.getConfiguration("aiConfigJumper").get("showSystemConfigs", false);
 }
 
-function getCustomWorkspacePaths(): string[] {
-  return getStringArrayConfiguration("customWorkspacePaths");
+function shouldFlattenSystemConfigs(): boolean {
+  return vscode.workspace.getConfiguration("aiConfigJumper").get("flattenSystemConfigs", false);
 }
 
-function getWorkspaceSearchRoots(): string[] {
-  return getStringArrayConfiguration("searchRoots");
+function getCustomWorkspacePaths(workspaceFolder: vscode.WorkspaceFolder): string[] {
+  return getMergedStringArrayConfiguration("customWorkspacePaths", workspaceFolder);
 }
 
-function getStringArrayConfiguration(key: string): string[] {
-  const values = vscode.workspace.getConfiguration("aiConfigJumper").get<unknown[]>(key, []);
+function getWorkspaceSearchRoots(workspaceFolder: vscode.WorkspaceFolder): string[] {
+  return getMergedStringArrayConfiguration("searchRoots", workspaceFolder);
+}
 
-  if (!Array.isArray(values)) {
+function getMergedStringArrayConfiguration(key: string, workspaceFolder: vscode.WorkspaceFolder): string[] {
+  const inspection = vscode.workspace.getConfiguration("aiConfigJumper", workspaceFolder).inspect<unknown[]>(key);
+
+  if (!inspection) {
     return [];
   }
 
-  return values.filter((value): value is string => typeof value === "string");
+  const values = [
+    ...getStringArrayValue(inspection.globalValue),
+    ...getStringArrayValue(inspection.workspaceValue),
+    ...getStringArrayValue(inspection.workspaceFolderValue)
+  ];
+
+  return Array.from(new Set(values));
+}
+
+function getStringArrayValue(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((item): item is string => typeof item === "string");
 }
 
 function normalizeConfiguredRelativePath(relativePath: string, allowWorkspaceRoot = false): string | undefined {
