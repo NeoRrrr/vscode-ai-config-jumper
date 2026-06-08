@@ -3,6 +3,7 @@
 ## 0.0.8
 
 - Add examples and JSON snippets for custom workspace path settings.
+- Clarify custom path examples for skills directories and project-relative config files.
 
 ## 0.0.7
 

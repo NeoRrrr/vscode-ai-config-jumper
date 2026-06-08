@@ -39,17 +39,18 @@
           "uniqueItems": true,
           "items": {
             "type": "string",
-            "default": "tools/ai/claude/skill",
+            "default": "skills",
             "examples": [
-              "tools/ai/claude/skill",
+              "skills",
+              "skills/claude",
               "docs/ai/AGENTS.md",
               ".config/ai"
             ],
-            "markdownDescription": "A workspace-relative file or directory path, for example `tools/ai/claude/skill`."
+            "markdownDescription": "A workspace-relative file or directory path, for example `skills` or `docs/ai/AGENTS.md`."
           },
           "examples": [
             [
-              "tools/ai/claude/skill",
+              "skills",
               "docs/ai/AGENTS.md"
             ]
           ],
@@ -58,12 +59,12 @@
               "label": "Show custom AI config paths",
               "description": "Add common custom workspace-relative AI config paths.",
               "body": [
-                "tools/ai/claude/skill",
+                "skills",
                 "docs/ai/AGENTS.md"
               ]
             }
           ],
-          "markdownDescription": "Additional workspace-relative files or directories to show when they exist. Examples: `tools/ai/claude/skill`, `docs/ai/AGENTS.md`, `.config/ai`."
+          "markdownDescription": "Additional workspace-relative files or directories to show when they exist. Examples: `skills`, `skills/claude`, `docs/ai/AGENTS.md`, `.config/ai`."
         },
         "aiConfigJumper.searchRoots": {
           "type": "array",
