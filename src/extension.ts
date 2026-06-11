@@ -237,7 +237,7 @@ class AiConfigTreeDataProvider implements vscode.TreeDataProvider<TreeNode> {
       return this.getDirectoryChildren(element.resource.uri);
     }
 
-    if (element instanceof FileSystemNode && element.fileType === vscode.FileType.Directory) {
+    if (element instanceof FileSystemNode && isDirectoryFileType(element.fileType)) {
       return this.getDirectoryChildren(element.uri);
     }
 
@@ -483,7 +483,7 @@ class AiConfigTreeDataProvider implements vscode.TreeDataProvider<TreeNode> {
     }
 
     const visibleEntries = entries
-      .filter(([name, fileType]) => fileType !== vscode.FileType.Directory || !IGNORED_DIRECTORIES.has(name))
+      .filter(([name, fileType]) => !isDirectoryFileType(fileType) || !IGNORED_DIRECTORIES.has(name))
       .sort(compareDirectoryEntries);
 
     if (visibleEntries.length === 0) {
@@ -536,7 +536,7 @@ class FileSystemNode extends vscode.TreeItem {
     readonly uri: vscode.Uri,
     readonly fileType: vscode.FileType
   ) {
-    const isDirectory = fileType === vscode.FileType.Directory;
+    const isDirectory = isDirectoryFileType(fileType);
 
     super(label, isDirectory ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
 
@@ -623,7 +623,7 @@ function getDirectoryUriFromCommandTarget(target: unknown): vscode.Uri | undefin
     return target.resource.uri;
   }
 
-  if (target instanceof FileSystemNode && target.fileType === vscode.FileType.Directory) {
+  if (target instanceof FileSystemNode && isDirectoryFileType(target.fileType)) {
     return target.uri;
   }
 
@@ -708,8 +708,8 @@ function compareResources(left: ConfigResource, right: ConfigResource): number {
 }
 
 function compareDirectoryEntries(left: [string, vscode.FileType], right: [string, vscode.FileType]): number {
-  const leftIsDirectory = left[1] === vscode.FileType.Directory;
-  const rightIsDirectory = right[1] === vscode.FileType.Directory;
+  const leftIsDirectory = isDirectoryFileType(left[1]);
+  const rightIsDirectory = isDirectoryFileType(right[1]);
 
   if (leftIsDirectory !== rightIsDirectory) {
     return leftIsDirectory ? -1 : 1;
@@ -916,6 +916,10 @@ function getSystemConfigCandidates(): SystemConfigCandidate[] {
 function hasFileType(actual: vscode.FileType, expected: ConfigKind): boolean {
   const expectedType = expected === "file" ? vscode.FileType.File : vscode.FileType.Directory;
   return (actual & expectedType) === expectedType;
+}
+
+function isDirectoryFileType(fileType: vscode.FileType): boolean {
+  return hasFileType(fileType, "directory");
 }
 
 function formatHomePath(fsPath: string): string {
